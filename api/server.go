@@ -3,6 +3,7 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -42,4 +43,48 @@ func GetServerInfo(URL string) (ServerInfo, error) {
 	}
 
 	return serverInfo, nil
+}
+
+func JoinServerAsMember(serverURL string, member JoinMemberRequest) (JoinMemberSuccessResponse, error) {
+	endpoint := serverURL + "/join"
+
+	memberJSON, err := json.Marshal(member)
+	if err != nil {
+		return JoinMemberSuccessResponse{}, errors.New("failed to encode member data")
+	}
+
+	response, err := http.Post(endpoint, "application/json", bytes.NewBuffer(memberJSON))
+
+	if err != nil {
+		return JoinMemberSuccessResponse{}, errors.New("failed to send join request")
+	}
+
+	defer response.Body.Close()
+
+	responseData, err := io.ReadAll(response.Body)
+
+	if err != nil {
+		return JoinMemberSuccessResponse{}, errors.New("failed to read request response")
+	}
+
+	if response.StatusCode != http.StatusCreated {
+		var errorResponse JoinMemberErrorResponse
+		err = json.Unmarshal(responseData, &errorResponse)
+
+		if err != nil {
+			return JoinMemberSuccessResponse{}, errors.New("failed to decode error response")
+		}
+
+		return JoinMemberSuccessResponse{}, errors.New(errorResponse.Error)
+	}
+
+	var successResponse JoinMemberSuccessResponse
+
+	err = json.Unmarshal(responseData, &successResponse)
+
+	if err != nil {
+		return JoinMemberSuccessResponse{}, errors.New("failed to decode success response")
+	}
+
+	return successResponse, nil
 }

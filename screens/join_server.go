@@ -1,4 +1,5 @@
 package screens
+
 import (
 	"eskimoe-client/api"
 	"eskimoe-client/database"
@@ -56,9 +57,14 @@ func (j JoinServerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyEnter:
 			if j.serverEntered {
-				database.JoinServer(globals.currentUser, j.server)
+				err := database.JoinServer(globals.currentUser, j.server)
+
+				if err != nil {
+					return j, tea.Quit
+				}
+
 				globals.servers = database.GetServers(globals.currentUser)
-        globals.currentUser.CurrentServer = j.server
+				globals.currentUser.CurrentServer = j.server
 
 				return screen().Switch(rootScreen())
 			}

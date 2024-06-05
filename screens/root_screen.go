@@ -29,6 +29,6 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (r RootScreen) View() string {
-  text := lipgloss.NewStyle().Render(fmt.Sprintf("Welcome to Eskimoe, %s! You are on %d servers. Your current server URL is: %s.", globals.currentUser.DisplayName, len(globals.servers), globals.currentUser.CurrentServer.URL))
+	text := lipgloss.NewStyle().Render(fmt.Sprintf("Welcome to Eskimoe, %s! You are on %d servers. Your current server URL is: %s.", globals.currentUser.DisplayName, len(globals.servers), globals.currentUser.CurrentServer.URL))
 	return text
 }

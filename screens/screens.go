@@ -57,9 +57,9 @@ func screen() ScreenSwitcher {
 		screen = joinServerScreen()
 	} else {
 		if globals.currentUser.CurrentServer.ID == 0 {
-      globals.currentUser.CurrentServer = globals.servers[0]
-    }
-    screen = rootScreen()
+			globals.currentUser.CurrentServer = globals.servers[0]
+		}
+		screen = rootScreen()
 	}
 
 	return ScreenSwitcher{

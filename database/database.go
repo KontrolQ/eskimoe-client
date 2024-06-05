@@ -1,6 +1,7 @@
 package database
 
 import (
+	"eskimoe-client/api"
 	"eskimoe-client/lib"
 	"log"
 
@@ -42,8 +43,23 @@ func GetServers(user User) []Server {
 	return servers
 }
 
-func JoinServer(user User, server Server) {
+func JoinServer(user User, server Server) error {
+	serverURL := server.URL
+	member := api.JoinMemberRequest{
+		UniqueID:    user.UniqueID,
+		UniqueToken: user.UniqueToken,
+		DisplayName: user.DisplayName,
+	}
+
+	_, err := api.JoinServerAsMember(serverURL, member)
+
+	if err != nil {
+		return err
+	}
+
 	Database.Model(&user).Association("Servers").Append(&server)
+
+	return nil
 }
 
 func Initialize() {
