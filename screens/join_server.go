@@ -26,7 +26,7 @@ type JoinServerScreen struct {
 func joinServerScreen() tea.Model {
 	form := huh.NewForm(
 		huh.NewGroup(
-			huh.NewInput().Title("Server URL").Placeholder("Enter the server URL").Validate(huh.ValidateLength(1, 64)).Validate(lib.ServerReachableValidator()).CharLimit(64).Key("server_url").WithWidth(64),
+			huh.NewInput().Title("Server URL").Placeholder("Enter the server URL").Validate(huh.ValidateLength(1, 256)).Validate(lib.ServerReachableValidator()).CharLimit(256).Key("server_url").WithWidth(64),
 		),
 	).WithTheme(theme).WithWidth(64).WithShowHelp(false)
 
