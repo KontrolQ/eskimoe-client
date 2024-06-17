@@ -31,6 +31,21 @@ type Preferences struct {
 	MessageInputHeight        int
 }
 
+type StyleSheet struct {
+	BaseStyle                     lipgloss.Style
+	ServerTextStyle               lipgloss.Style
+	RoomTextStyle                 lipgloss.Style
+	UserInfoStyle                 lipgloss.Style
+	NormalAreaStyle               lipgloss.Style
+	HighlightedAreaStyle          lipgloss.Style
+	CategoryListTextStyle         lipgloss.Style
+	HighlightedMessageBorderStyle lipgloss.Style
+	RoomListTextStyle             lipgloss.Style
+	HighlightedRoomTextStyle      lipgloss.Style
+	MessageAuthorStyle            lipgloss.Style
+	MessageTextStyle              lipgloss.Style
+}
+
 type Reactions struct {
 	Reaction string
 	Count    int

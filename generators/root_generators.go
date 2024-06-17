@@ -1,6 +1,7 @@
 package generators
 
 import (
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -8,20 +9,31 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/reflow/wrap"
 
+	"eskimoe-client/database"
 	"eskimoe-client/shared"
 )
 
+var Style shared.StyleSheet
+var Preferences database.UserPreferences
+
+func InitializeStyles(User database.User) {
+	Preferences = User.Preferences
+	Style = GenerateStyles(Preferences)
+}
+
 func GetViewportDimensions(width, height int) (int, int) {
-	w := width - shared.DefaultPreferences.SidebarWidth - 4
-	h := height - shared.DefaultPreferences.MessageInputHeight - 6
+	w := width - Preferences.SidebarWidth - 4
+	h := height - Preferences.MessageInputHeight - 6
+
+	log.Printf("Viewport dimensions: %d x %d", w, h)
 
 	return w, h
 }
 
 func SingleMessageView(message shared.Message, width int) string {
-	spacer := shared.BaseStyle.Render(" ")
+	spacer := Style.BaseStyle.Render(" ")
 
-	author := shared.MessageAuthorStyle.Render(message.Author)
+	author := Style.MessageAuthorStyle.Render(message.Author)
 
 	var timestring string
 
@@ -31,27 +43,27 @@ func SingleMessageView(message shared.Message, width int) string {
 		timestring = message.SentAt.Format("2006-01-02 15:04")
 	}
 
-	time := shared.MessageAuthorStyle.Padding(0, 1).Render(timestring)
+	time := Style.MessageAuthorStyle.Padding(0, 1).Render(timestring)
 
 	var reactionsString string
 
 	for _, reaction := range message.Reactions {
-		reactionsString += shared.BaseStyle.Render("[ ")
-		reactionsString += shared.BaseStyle.
+		reactionsString += Style.BaseStyle.Render("[ ")
+		reactionsString += Style.BaseStyle.
 			Foreground(reaction.Color).
 			Render(reaction.Reaction)
 		reactionsString += spacer
-		reactionsString += shared.BaseStyle.
+		reactionsString += Style.BaseStyle.
 			Foreground(reaction.Color).
 			Render(strconv.Itoa(reaction.Count))
-		reactionsString += shared.BaseStyle.Render(" ] ")
+		reactionsString += Style.BaseStyle.Render(" ] ")
 	}
 
-	reactions := shared.BaseStyle.Padding(0, 1).Render(reactionsString)
+	reactions := Style.BaseStyle.Padding(0, 1).Render(reactionsString)
 
 	content := wrap.String(message.Content, width-4)
 
-	content = shared.MessageTextStyle.Render(content)
+	content = Style.MessageTextStyle.Render(content)
 
 	m := lipgloss.JoinHorizontal(
 		lipgloss.Top,
@@ -73,8 +85,8 @@ func MessageViewBuilder(messages []shared.Message, currentlyHighlightedMessage i
 	var messagesArray []string
 
 	if len(messages) == 0 {
-		centralizedMessage := shared.BaseStyle.Render("No messages in this room!")
-		return shared.BaseStyle.Padding(0, 0, 0, (width-lipgloss.Width(centralizedMessage))/2).Render(centralizedMessage)
+		centralizedMessage := Style.BaseStyle.Render("No messages in this room!")
+		return Style.BaseStyle.Padding(0, 0, 0, (width-lipgloss.Width(centralizedMessage))/2).Render(centralizedMessage)
 	}
 
 	for i, message := range messages {
@@ -83,7 +95,7 @@ func MessageViewBuilder(messages []shared.Message, currentlyHighlightedMessage i
 		// Add border to currently highlighted message
 
 		if i == currentlyHighlightedMessage && mainAreaHighlighted {
-			messageView = shared.HighlightedMessageBorderStyle.Render(messageView)
+			messageView = Style.HighlightedMessageBorderStyle.Render(messageView)
 		}
 
 		messagesArray = append(messagesArray, messageView)
@@ -95,18 +107,18 @@ func MessageViewBuilder(messages []shared.Message, currentlyHighlightedMessage i
 func TopBarView(serverName, currentRoomName, currentUser string, width int) string {
 	w := lipgloss.Width
 
-	spacer := shared.BaseStyle.Render(" ")
+	spacer := Style.BaseStyle.Render(" ")
 
-	serverText := shared.ServerTextStyle.Bold(true).Render("Server: ")
-	serverNameText := shared.ServerTextStyle.Render(serverName)
+	serverText := Style.ServerTextStyle.Bold(true).Render("Server:")
+	serverNameText := Style.ServerTextStyle.Render(serverName)
 
-	roomText := shared.RoomTextStyle.Bold(true).Render("Room: ")
-	roomNameText := shared.RoomTextStyle.Render(currentRoomName)
+	roomText := Style.RoomTextStyle.Bold(true).Render("Room:")
+	roomNameText := Style.RoomTextStyle.Render(currentRoomName)
 
-	userAreaText := shared.UserInfoStyle.Bold(true).Render("User: ")
-	userText := shared.UserInfoStyle.Render(currentUser)
+	userAreaText := Style.UserInfoStyle.Bold(true).Render("User:")
+	userText := Style.UserInfoStyle.Render(currentUser)
 
-	separator := shared.BaseStyle.Width(width - w(serverText) - w(serverNameText) - w(roomText) - w(roomNameText) - w(userAreaText) - w(userText) - w(spacer)).Render("")
+	separator := Style.BaseStyle.Width(width - w(serverText) - w(serverNameText) - w(roomText) - w(roomNameText) - w(userAreaText) - w(userText) - w(spacer)).Render("")
 
 	topBar := lipgloss.JoinHorizontal(
 		lipgloss.Top,
@@ -132,17 +144,17 @@ func SidebarView(categories []shared.Category, currentlySelectedRoom int, height
 		var categoryText string
 
 		if i == 0 {
-			categoryText = shared.CategoryListTextStyle.Render(category.Name)
+			categoryText = Style.CategoryListTextStyle.Render(category.Name)
 		} else {
-			categoryText = shared.CategoryListTextStyle.Margin(1, 0, 0, 0).Render(category.Name)
+			categoryText = Style.CategoryListTextStyle.Margin(1, 0, 0, 0).Render(category.Name)
 		}
 
 		sidebarDoc.WriteString(categoryText + "\n")
 
 		for _, room := range category.Rooms {
-			roomText := shared.RoomListTextStyle.MarginLeft(2).Render(room.Name)
+			roomText := Style.RoomListTextStyle.MarginLeft(2).Render(room.Name)
 			if room.RoomId == currentlySelectedRoom {
-				roomText = shared.HighlightedRoomTextStyle.MarginLeft(2).Render(room.Name)
+				roomText = Style.HighlightedRoomTextStyle.MarginLeft(2).Render(room.Name)
 			}
 			sidebarDoc.WriteString(roomText + "\n")
 		}
@@ -152,13 +164,13 @@ func SidebarView(categories []shared.Category, currentlySelectedRoom int, height
 	var sidebar string
 
 	if currentlyHighlighted {
-		sidebar = shared.HighlightedAreaStyle.Padding(0, 1).
-			Width(shared.DefaultPreferences.SidebarWidth).
+		sidebar = Style.HighlightedAreaStyle.Padding(0, 1).
+			Width(Preferences.SidebarWidth).
 			Height(height - h(topBar) - 2).
 			Render(sidebarDoc.String())
 	} else {
-		sidebar = shared.NormalAreaStyle.Padding(0, 1).
-			Width(shared.DefaultPreferences.SidebarWidth).
+		sidebar = Style.NormalAreaStyle.Padding(0, 1).
+			Width(Preferences.SidebarWidth).
 			Height(height - h(topBar) - 2).
 			Render(sidebarDoc.String())
 	}
@@ -172,36 +184,36 @@ func MainAreaView(viewport string, width, height int, topBar string, currentlyHi
 	var mainArea string
 
 	if currentlyHighlighted {
-		mainArea = shared.HighlightedAreaStyle.Padding(0, 1).
-			Width(width - shared.DefaultPreferences.SidebarWidth - 4).
-			Height(height - h(topBar) - shared.DefaultPreferences.MessageInputHeight - 4).
+		mainArea = Style.HighlightedAreaStyle.Padding(0, 1).
+			Width(width - Preferences.SidebarWidth - 4).
+			Height(height - h(topBar) - Preferences.MessageInputHeight - 4).
 			Render(viewport)
 	} else {
-		mainArea = shared.NormalAreaStyle.Padding(0, 1).
-			Width(width - shared.DefaultPreferences.SidebarWidth - 4).
-			Height(height - h(topBar) - shared.DefaultPreferences.MessageInputHeight - 4).
+		mainArea = Style.NormalAreaStyle.Padding(0, 1).
+			Width(width - Preferences.SidebarWidth - 4).
+			Height(height - h(topBar) - Preferences.MessageInputHeight - 4).
 			Render(viewport)
 	}
 
 	return mainArea
 }
 
-func MessageInputView(width int, currentlyHighlighted bool) string {
+func MessageInputView(textareaView string, width int, currentlyHighlighted bool) string {
 	var messageInputDoc strings.Builder
 
-	messageInputDoc.WriteString(shared.BaseStyle.Render("Message: "))
+	messageInputDoc.WriteString(Style.BaseStyle.Render(textareaView))
 
 	var messageInput string
 
 	if currentlyHighlighted {
-		messageInput = shared.HighlightedAreaStyle.Padding(0, 1).
-			Width(width - shared.DefaultPreferences.SidebarWidth - 4).
-			Height(shared.DefaultPreferences.MessageInputHeight).
+		messageInput = Style.HighlightedAreaStyle.Padding(0, 1).
+			Width(width - Preferences.SidebarWidth - 4).
+			Height(Preferences.MessageInputHeight).
 			Render(messageInputDoc.String())
 	} else {
-		messageInput = shared.NormalAreaStyle.Padding(0, 1).
-			Width(width - shared.DefaultPreferences.SidebarWidth - 4).
-			Height(shared.DefaultPreferences.MessageInputHeight).
+		messageInput = Style.NormalAreaStyle.Padding(0, 1).
+			Width(width - Preferences.SidebarWidth - 4).
+			Height(Preferences.MessageInputHeight).
 			Render(messageInputDoc.String())
 	}
 

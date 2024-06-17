@@ -42,29 +42,29 @@ var DefaultPreferences = Preferences{
 		Dark:  catppuccin.Mocha.Yellow().Hex,
 	},
 	RoomStatusText: ColorPreference{
-		Light: catppuccin.Mocha.Base().Hex,
-		Dark:  catppuccin.Latte.Base().Hex,
+		Light: catppuccin.Latte.Base().Hex,
+		Dark:  catppuccin.Mocha.Base().Hex,
 	},
 	RoomStatusBackground: ColorPreference{
-		Light: catppuccin.Mocha.Teal().Hex,
-		Dark:  catppuccin.Latte.Teal().Hex,
+		Light: catppuccin.Latte.Teal().Hex,
+		Dark:  catppuccin.Mocha.Teal().Hex,
 	},
 	ServerStatusText: ColorPreference{
-		Light: catppuccin.Mocha.Base().Hex,
-		Dark:  catppuccin.Latte.Base().Hex,
+		Light: catppuccin.Latte.Base().Hex,
+		Dark:  catppuccin.Mocha.Base().Hex,
 	},
 	ServerStatusBackground: ColorPreference{
-		Light: catppuccin.Mocha.Green().Hex,
-		Dark:  catppuccin.Latte.Green().Hex,
+		Light: catppuccin.Latte.Green().Hex,
+		Dark:  catppuccin.Mocha.Green().Hex,
 	},
 	UserBarText: ColorPreference{
-		Light: catppuccin.Mocha.Base().Hex,
-		Dark:  catppuccin.Latte.Base().Hex,
+		Light: catppuccin.Latte.Base().Hex,
+		Dark:  catppuccin.Mocha.Base().Hex,
 	},
 	UserBarBackground: ColorPreference{
-		Light: catppuccin.Mocha.Yellow().Hex,
-		Dark:  catppuccin.Latte.Yellow().Hex,
+		Light: catppuccin.Latte.Yellow().Hex,
+		Dark:  catppuccin.Mocha.Yellow().Hex,
 	},
-	SidebarWidth: 30,
+	SidebarWidth:       30,
 	MessageInputHeight: 10,
 }

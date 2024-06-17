@@ -4,8 +4,9 @@ import (
 	"eskimoe-client/data"
 	"eskimoe-client/generators"
 	"eskimoe-client/shared"
-	"strings"
+	"time"
 
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -18,11 +19,22 @@ type RootScreen struct {
 	currentlyHighlightedMessage int
 	messages                    []shared.Message
 	roomChanged                 bool
+	textarea                    textarea.Model
 }
 
 func rootScreen() tea.Model {
+	generators.InitializeStyles(globals.currentUser)
+
 	vw, vh := generators.GetViewportDimensions(globals.width, globals.height)
 	messagesVP := viewport.New(vw, vh)
+
+	ti := textarea.New()
+	ti.Placeholder = "Write Something Epic... (Ctrl + S to send)"
+	ti.Focus()
+	ti.SetWidth(vw - 4)
+	ti.SetHeight(shared.DefaultPreferences.MessageInputHeight)
+	ti.CharLimit = 4096
+	ti.ShowLineNumbers = false
 
 	return RootScreen{
 		messagesViewPort:            messagesVP,
@@ -31,19 +43,37 @@ func rootScreen() tea.Model {
 		currentlyHighlightedMessage: len(data.GeneralRoomMessages) - 1,
 		messages:                    data.GeneralRoomMessages,
 		roomChanged:                 true,
+		textarea:                    ti,
 	}
 }
 
 func (r RootScreen) Init() tea.Cmd {
-	return tea.SetWindowTitle("Eskimoe")
+	return tea.Batch(
+		tea.SetWindowTitle("Eskimoe"),
+		textarea.Blink,
+	)
 }
 
 func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
 		viewPortCommand tea.Cmd
+		textAreaCommand tea.Cmd
 	)
 
 	areas := []string{"sidebar", "mainArea", "messageInput"}
+
+	// OnWindowResize
+	if msg, ok := msg.(tea.WindowSizeMsg); ok {
+		globals.width = msg.Width
+		globals.height = msg.Height
+
+		vw, vh := generators.GetViewportDimensions(globals.width, globals.height)
+		r.messagesViewPort.Width = vw
+		r.messagesViewPort.Height = vh
+
+		r.textarea.SetWidth(vw - 4)
+		r.textarea.SetHeight(shared.DefaultPreferences.MessageInputHeight)
+	}
 
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		// Area Switching: Tab and Shift+Tab to switch between areas
@@ -81,6 +111,10 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					r.currentlySelectedRoom++
 				}
+
+				r.messages = data.GetRoomMessages(r.currentlySelectedRoom)
+				r.currentlyHighlightedMessage = len(r.messages) - 1
+				r.roomChanged = true
 			}
 
 			if msg.String() == "k" || msg.String() == "up" {
@@ -89,13 +123,11 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					r.currentlySelectedRoom--
 				}
+
+				r.messages = data.GetRoomMessages(r.currentlySelectedRoom)
+				r.currentlyHighlightedMessage = len(r.messages) - 1
+				r.roomChanged = true
 			}
-
-			// Load messages for the selected room
-			r.messages = data.GetRoomMessages(r.currentlySelectedRoom)
-
-			r.currentlyHighlightedMessage = len(r.messages) - 1
-			r.roomChanged = true
 		}
 
 		// Message Navigation: j/k or arrow keys to navigate
@@ -113,7 +145,40 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Message Input: ctrl+c to quit the application
+		// Message Input:
+		if r.currentlyHighlightedArea != "messageInput" {
+			if r.textarea.Focused() {
+				r.textarea.Blur()
+			}
+
+			r.messagesViewPort.KeyMap = viewport.DefaultKeyMap()
+		} else {
+			if msg.String() == "ctrl+s" {
+				if r.textarea.Value() != "" {
+					newMessage := shared.Message{
+						Author:    globals.currentUser.DisplayName,
+						Content:   r.textarea.Value(),
+						Reactions: []shared.Reactions{},
+						SentAt:    time.Now(),
+					}
+
+					r.messages = append(r.messages, newMessage)
+					r.currentlyHighlightedMessage = len(r.messages) - 1
+					r.roomChanged = true
+					r.textarea.SetValue("")
+				}
+			}
+
+			if !r.textarea.Focused() {
+				r.textarea.Focus()
+			}
+
+			r.messagesViewPort.KeyMap = viewport.KeyMap{}
+
+			// Shift+Enter to send message
+		}
+
+		// ctrl+c to quit the application
 		if msg.String() == "ctrl+c" {
 			return r, tea.Quit
 		}
@@ -129,28 +194,35 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	r.messagesViewPort, viewPortCommand = r.messagesViewPort.Update(msg)
+	r.textarea, textAreaCommand = r.textarea.Update(msg)
 
-	return r, tea.Batch(viewPortCommand)
+	return r, tea.Batch(viewPortCommand, textAreaCommand)
 }
 
 func (r RootScreen) View() string {
-	doc := strings.Builder{}
-
 	currentRoomName := data.GetRoomName(r.currentlySelectedRoom)
 
 	topBar := generators.TopBarView("Eskimoe", currentRoomName, globals.currentUser.DisplayName, globals.width)
 
 	sidebar := generators.SidebarView(data.Categories, r.currentlySelectedRoom, globals.height, topBar, r.currentlyHighlightedArea == "sidebar")
 
-	messageInput := generators.MessageInputView(globals.width, r.currentlyHighlightedArea == "messageInput")
+	messageInput := generators.MessageInputView(r.textarea.View(), globals.width, r.currentlyHighlightedArea == "messageInput")
 
 	mainArea := generators.MainAreaView(r.messagesViewPort.View(), globals.width, globals.height, topBar, r.currentlyHighlightedArea == "mainArea")
 
-	chatArea := lipgloss.JoinVertical(lipgloss.Top, mainArea, messageInput)
+	rootView := lipgloss.JoinVertical(
+		lipgloss.Top,
+		topBar,
+		lipgloss.JoinHorizontal(
+			lipgloss.Left,
+			sidebar,
+			lipgloss.JoinVertical(
+				lipgloss.Top,
+				mainArea,
+				messageInput,
+			),
+		),
+	)
 
-	mainW := lipgloss.JoinHorizontal(lipgloss.Top, sidebar, chatArea)
-
-	doc.WriteString(topBar + "\n" + mainW)
-
-	return doc.String()
+	return rootView
 }
