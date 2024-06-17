@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 type ServerInfo struct {
@@ -18,7 +19,7 @@ type ServerInfo struct {
 }
 
 func GetServerInfo(URL string) (ServerInfo, error) {
-	_, err := url.ParseRequestURI(URL)
+	_, err := url.ParseRequestURI(strings.TrimSpace(URL))
 	if err != nil {
 		return ServerInfo{}, errors.New("provided URL is not valid")
 	}
