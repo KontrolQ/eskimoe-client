@@ -1,7 +1,6 @@
 package generators
 
 import (
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -24,8 +23,6 @@ func InitializeStyles(User database.User) {
 func GetViewportDimensions(width, height int) (int, int) {
 	w := width - Preferences.SidebarWidth - 4
 	h := height - Preferences.MessageInputHeight - 6
-
-	log.Printf("Viewport dimensions: %d x %d", w, h)
 
 	return w, h
 }

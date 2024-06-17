@@ -27,6 +27,7 @@ func rootScreen() tea.Model {
 
 	vw, vh := generators.GetViewportDimensions(globals.width, globals.height)
 	messagesVP := viewport.New(vw, vh)
+	messagesVP.KeyMap = viewport.KeyMap{}
 
 	ti := textarea.New()
 	ti.Placeholder = "Write Something Epic... (Ctrl + S to send)"
@@ -135,12 +136,14 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.String() == "j" || msg.String() == "down" {
 				if r.currentlyHighlightedMessage < len(r.messages)-1 {
 					r.currentlyHighlightedMessage++
+					r.messagesViewPort.LineDown(3)
 				}
 			}
 
 			if msg.String() == "k" || msg.String() == "up" {
 				if r.currentlyHighlightedMessage > 0 {
 					r.currentlyHighlightedMessage--
+					r.messagesViewPort.LineUp(3)
 				}
 			}
 		}
@@ -150,8 +153,6 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if r.textarea.Focused() {
 				r.textarea.Blur()
 			}
-
-			r.messagesViewPort.KeyMap = viewport.DefaultKeyMap()
 		} else {
 			if msg.String() == "ctrl+s" {
 				if r.textarea.Value() != "" {
@@ -172,10 +173,6 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !r.textarea.Focused() {
 				r.textarea.Focus()
 			}
-
-			r.messagesViewPort.KeyMap = viewport.KeyMap{}
-
-			// Shift+Enter to send message
 		}
 
 		// ctrl+c to quit the application
