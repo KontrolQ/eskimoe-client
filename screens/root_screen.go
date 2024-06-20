@@ -6,6 +6,7 @@ import (
 	"eskimoe-client/shared"
 	"time"
 
+	catppuccin "github.com/catppuccin/go"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -144,6 +145,84 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if r.currentlyHighlightedMessage > 0 {
 					r.currentlyHighlightedMessage--
 					r.messagesViewPort.LineUp(3)
+				}
+			}
+
+			// likeReaction := shared.Reactions{
+			// 	Reaction: "LIKE",
+			// 	Count: 1,
+			// 	Users: []string{"Jane Doe"},
+			// 	Color: lipgloss.AdaptiveColor{
+			// 		Light: catppuccin.Mocha.Sapphire().Hex,
+			// 		Dark: catppuccin.Mocha.Sapphire().Hex,
+			// 	},
+			// }
+			// Ctrl + L to like the currently highlighted message or unlike it if already liked
+
+			if msg.String() == "ctrl+l" {
+				message := r.messages[r.currentlyHighlightedMessage]
+
+				// Check if the message has a LIKE reaction
+				likeReactionIndex := -1
+
+				for i, reaction := range message.Reactions {
+					if reaction.Reaction == "LIKE" {
+						likeReactionIndex = i
+						break
+					}
+				}
+
+				if likeReactionIndex == -1 {
+					// Add a LIKE reaction to the message
+					newReaction := shared.Reactions{
+						Reaction: "LIKE",
+						Count:    1,
+						Users:    []string{globals.currentUser.DisplayName},
+						Color: lipgloss.AdaptiveColor{
+							Light: catppuccin.Mocha.Sapphire().Hex,
+							Dark:  catppuccin.Mocha.Sapphire().Hex,
+						},
+					}
+
+					r.messages[r.currentlyHighlightedMessage].Reactions = append(r.messages[r.currentlyHighlightedMessage].Reactions, newReaction)
+				} else {
+					// Check if the current user has already liked the message
+					liked := false
+
+					for _, reaction := range message.Reactions {
+						if reaction.Reaction == "LIKE" {
+							for _, user := range reaction.Users {
+								if user == globals.currentUser.DisplayName {
+									liked = true
+									break
+								}
+							}
+						}
+					}
+
+					if liked {
+						// Unlike the message
+						for i, reaction := range message.Reactions {
+							if reaction.Reaction == "LIKE" {
+								for j, user := range reaction.Users {
+									if user == globals.currentUser.DisplayName {
+										message.Reactions[i].Users = append(reaction.Users[:j], reaction.Users[j+1:]...)
+										message.Reactions[i].Count--
+										break
+									}
+								}
+							}
+						}
+					} else {
+						// Like the message
+						for i, reaction := range message.Reactions {
+							if reaction.Reaction == "LIKE" {
+								message.Reactions[i].Users = append(reaction.Users, globals.currentUser.DisplayName)
+								message.Reactions[i].Count++
+								break
+							}
+						}
+					}
 				}
 			}
 		}
