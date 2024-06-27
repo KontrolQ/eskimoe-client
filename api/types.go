@@ -22,7 +22,6 @@ type JoinMemberErrorResponse struct {
 type Permission string
 
 const (
-	ViewRoom           Permission = "view_room"
 	SendMessage        Permission = "send_message"
 	AddLink            Permission = "add_link"
 	AddFile            Permission = "add_file"
@@ -40,34 +39,23 @@ const (
 	ViewMessageHistory Permission = "view_message_history"
 	CreateEvents       Permission = "create_events"
 	ManageEvents       Permission = "manage_events"
+	GenerateInvites    Permission = "generate_invites"
 	Administrator      Permission = "administrator"
 )
 
-// Room Types: Announcement, Text, Commands, Archive
-type RoomType string
-
-const (
-	Announcement RoomType = "announcement"
-	Text         RoomType = "text"
-	Commands     RoomType = "commands"
-	Archive      RoomType = "archive"
-)
-
 type Member struct {
-	UniqueID    string `gorm:"unique" json:"unique_id"`
+	AuthToken   string `json:"auth_token"`
 	DisplayName string `json:"display_name"`
 	About       string `json:"about"`
-	JoinedAt    string `json:"joined_at"`
 	Pronouns    string `json:"pronouns"`
 	Roles       []Role `json:"roles"`
+	JoinedAt    string `json:"joined_at"`
 }
 
 type Role struct {
-	Name        string             `gorm:"unique" json:"name"`
-	Permissions []ServerPermission `json:"permissions"`
-}
-
-type ServerPermission struct {
-	Role       Role       `json:"role"`
-	Permission Permission `json:"permission"`
+	ID          int          `json:"id"`
+	Name        string       `json:"name"`
+	Permissions []Permission `json:"permissions"`
+	SystemRole  bool         `json:"system_role"`
+	CreatedAt   string       `json:"created_at"`
 }

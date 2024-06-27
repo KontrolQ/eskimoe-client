@@ -5,6 +5,7 @@ import (
 	"eskimoe-client/database"
 	"eskimoe-client/lib"
 	"fmt"
+	"log"
 
 	catppuccin "github.com/catppuccin/go"
 	"github.com/charmbracelet/bubbles/help"
@@ -60,6 +61,7 @@ func (j JoinServerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				err := database.JoinServer(globals.currentUser, j.server)
 
 				if err != nil {
+					log.Fatal("Error joining server:", err)
 					return j, tea.Quit
 				}
 

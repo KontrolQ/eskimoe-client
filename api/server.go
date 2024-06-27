@@ -47,7 +47,9 @@ func GetServerInfo(URL string) (ServerInfo, error) {
 }
 
 func JoinServerAsMember(serverURL string, member JoinMemberRequest) (JoinMemberSuccessResponse, error) {
-	endpoint := serverURL + "/join"
+	serverURL = strings.TrimRight(serverURL, "/")
+
+	endpoint := serverURL + "/members/join"
 
 	memberJSON, err := json.Marshal(member)
 	if err != nil {
