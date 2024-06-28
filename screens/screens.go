@@ -2,9 +2,11 @@ package screens
 
 import (
 	"eskimoe-client/database"
+	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
+	"golang.org/x/term"
 )
 
 type ScreenSwitcher struct {
@@ -74,6 +76,16 @@ func Initialize() tea.Model {
 
 	globals.currentUser = currentUser
 	globals.servers = servers
+
+	width, height, err := term.GetSize(int(os.Stdout.Fd()))
+
+	if err != nil {
+		width = 80
+		height = 30
+	}
+
+	globals.width = width
+	globals.height = height
 
 	return screen()
 }
