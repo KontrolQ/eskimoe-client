@@ -26,7 +26,7 @@ type JoinServerScreen struct {
 func joinServerScreen() tea.Model {
 	form := huh.NewForm(
 		huh.NewGroup(
-			huh.NewInput().Title("Server URL").Placeholder("Enter the server URL").Validate(huh.ValidateLength(1, 64)).Validate(lib.ServerReachableValidator()).CharLimit(64).Key("server_url").WithWidth(64),
+			huh.NewInput().Title("Server URL").Placeholder("Enter the server URL").Validate(huh.ValidateLength(1, 256)).Validate(lib.ServerReachableValidator()).CharLimit(256).Key("server_url").WithWidth(64),
 		),
 	).WithTheme(theme).WithWidth(64).WithShowHelp(false)
 
@@ -58,15 +58,16 @@ func (j JoinServerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			if j.serverEntered {
 				err := database.JoinServer(globals.currentUser, j.server)
-
+				fmt.Println("Joining server", j.server)
 				if err != nil {
-					return j, tea.Quit
+					fmt.Println("Error joining server", err)
+				} else {
+					globals.servers = database.GetServers(globals.currentUser)
+					globals.currentUser.CurrentServer = j.server
+
+					return screen().Switch(rootScreen())
 				}
 
-				globals.servers = database.GetServers(globals.currentUser)
-				globals.currentUser.CurrentServer = j.server
-
-				return screen().Switch(rootScreen())
 			}
 		case tea.KeyEscape:
 			return screen().Switch(joinServerScreen())
@@ -81,6 +82,12 @@ func (j JoinServerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if j.form.State == huh.StateCompleted {
 		serverURL := j.form.GetString("server_url")
+
+		// Remove trailing slash if it exists
+		if serverURL[len(serverURL)-1] == '/' {
+			serverURL = serverURL[:len(serverURL)-1]
+		}
+
 		j.server = database.Server{
 			URL: serverURL,
 		}
