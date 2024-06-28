@@ -90,11 +90,15 @@ func JoinServer(user User, server Server) error {
 		DisplayName: user.DisplayName,
 	}
 
-	_, err := api.JoinServerAsMember(serverURL, member)
+	resp, err := api.JoinServerAsMember(serverURL, member)
 
 	if err != nil {
 		return err
 	}
+
+	// Update the user's auth token
+	user.AuthToken = resp.Member.AuthToken
+	Database.Save(&user)
 
 	Database.Model(&user).Association("Servers").Append(&server)
 

@@ -6,6 +6,7 @@ type User struct {
 	ID              uint            `gorm:"primaryKey;autoIncrement:true" json:"-"`
 	UniqueID        string          `gorm:"unique;not null" json:"unique_id"`
 	UniqueToken     string          `gorm:"unique;not null" json:"unique_token"`
+	AuthToken       string          `json:"auth_token"`
 	Servers         []Server        `gorm:"many2many:user_servers" json:"-"`
 	DisplayName     string          `json:"display_name"`
 	Current         bool            `gorm:"default:false" json:"-"`
