@@ -5,7 +5,6 @@ import (
 	"eskimoe-client/database"
 	"eskimoe-client/lib"
 	"fmt"
-	"log"
 
 	catppuccin "github.com/catppuccin/go"
 	"github.com/charmbracelet/bubbles/help"
@@ -59,16 +58,16 @@ func (j JoinServerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			if j.serverEntered {
 				err := database.JoinServer(globals.currentUser, j.server)
-
+				fmt.Println("Joining server", j.server)
 				if err != nil {
-					log.Fatal("Error joining server:", err)
-					return j, tea.Quit
+					fmt.Println("Error joining server", err)
+				} else {
+					globals.servers = database.GetServers(globals.currentUser)
+					globals.currentUser.CurrentServer = j.server
+
+					return screen().Switch(rootScreen())
 				}
 
-				globals.servers = database.GetServers(globals.currentUser)
-				globals.currentUser.CurrentServer = j.server
-
-				return screen().Switch(rootScreen())
 			}
 		case tea.KeyEscape:
 			return screen().Switch(joinServerScreen())
@@ -83,6 +82,12 @@ func (j JoinServerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if j.form.State == huh.StateCompleted {
 		serverURL := j.form.GetString("server_url")
+
+		// Remove trailing slash if it exists
+		if serverURL[len(serverURL)-1] == '/' {
+			serverURL = serverURL[:len(serverURL)-1]
+		}
+
 		j.server = database.Server{
 			URL: serverURL,
 		}
