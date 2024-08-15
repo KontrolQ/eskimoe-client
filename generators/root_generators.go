@@ -3,11 +3,11 @@ package generators
 import (
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/reflow/wrap"
 
+	"eskimoe-client/api"
 	"eskimoe-client/database"
 	"eskimoe-client/shared"
 )
@@ -27,18 +27,20 @@ func GetViewportDimensions(width, height int) (int, int) {
 	return w, h
 }
 
-func SingleMessageView(message shared.Message, width int) string {
+func SingleMessageView(message api.Message, width int) string {
 	spacer := Style.BaseStyle.Render(" ")
 
-	author := Style.MessageAuthorStyle.Render(message.Author)
+	author := Style.MessageAuthorStyle.Render(message.Author.DisplayName)
 
 	var timestring string
 
-	if message.SentAt.Day() == time.Now().Day() {
-		timestring = message.SentAt.Format("15:04")
-	} else {
-		timestring = message.SentAt.Format("2006-01-02 15:04")
-	}
+	timestring = message.CreatedAt
+
+	// if message.SentAt.Day() == time.Now().Day() {
+	// 	timestring = message.SentAt.Format("15:04")
+	// } else {
+	// 	timestring = message.SentAt.Format("2006-01-02 15:04")
+	// }
 
 	time := Style.MessageAuthorStyle.Padding(0, 1).Render(timestring)
 
@@ -47,11 +49,11 @@ func SingleMessageView(message shared.Message, width int) string {
 	for _, reaction := range message.Reactions {
 		reactionsString += Style.BaseStyle.Render("[ ")
 		reactionsString += Style.BaseStyle.
-			Foreground(reaction.Color).
-			Render(reaction.Reaction)
+			Foreground(lipgloss.Color(reaction.Reaction.Color)).
+			Render(reaction.Reaction.Reaction)
 		reactionsString += spacer
 		reactionsString += Style.BaseStyle.
-			Foreground(reaction.Color).
+			Foreground(lipgloss.Color(reaction.Reaction.Color)).
 			Render(strconv.Itoa(reaction.Count))
 		reactionsString += Style.BaseStyle.Render(" ] ")
 	}
@@ -78,7 +80,7 @@ func SingleMessageView(message shared.Message, width int) string {
 	return m
 }
 
-func MessageViewBuilder(messages []shared.Message, currentlyHighlightedMessage int, width int, mainAreaHighlighted bool) string {
+func MessageViewBuilder(messages []api.Message, currentlyHighlightedMessage int, width int, mainAreaHighlighted bool) string {
 	var messagesArray []string
 
 	if len(messages) == 0 {
@@ -132,7 +134,7 @@ func TopBarView(serverName, currentRoomName, currentUser string, width int) stri
 	return topBar
 }
 
-func SidebarView(categories []shared.Category, currentlySelectedRoom int, height int, topBar string, currentlyHighlighted bool) string {
+func SidebarView(categories []api.Category, currentlySelectedRoom int, height int, topBar string, currentlyHighlighted bool) string {
 	h := lipgloss.Height
 
 	var sidebarDoc strings.Builder
@@ -150,7 +152,7 @@ func SidebarView(categories []shared.Category, currentlySelectedRoom int, height
 
 		for _, room := range category.Rooms {
 			roomText := Style.RoomListTextStyle.MarginLeft(2).Render(room.Name)
-			if room.RoomId == currentlySelectedRoom {
+			if room.ID == currentlySelectedRoom {
 				roomText = Style.HighlightedRoomTextStyle.MarginLeft(2).Render(room.Name)
 			}
 			sidebarDoc.WriteString(roomText + "\n")

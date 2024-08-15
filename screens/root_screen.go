@@ -1,26 +1,32 @@
 package screens
 
 import (
-	"eskimoe-client/data"
+	"encoding/json"
+	"eskimoe-client/api"
 	"eskimoe-client/generators"
 	"eskimoe-client/shared"
-	"time"
+	"log"
+	"strings"
 
-	catppuccin "github.com/catppuccin/go"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/gorilla/websocket"
 )
 
 type RootScreen struct {
 	messagesViewPort            viewport.Model
+	currentServerInfo           api.ServerInfoAuthorized
+	totalRoomCount              int
 	currentlyHighlightedArea    string
 	currentlySelectedRoom       int
 	currentlyHighlightedMessage int
-	messages                    []shared.Message
+	messages                    []api.Message
 	roomChanged                 bool
 	textarea                    textarea.Model
+	wsConn                      *websocket.Conn
+	messageChannel              chan api.Message
 }
 
 func rootScreen() tea.Model {
@@ -38,14 +44,57 @@ func rootScreen() tea.Model {
 	ti.CharLimit = 4096
 	ti.ShowLineNumbers = false
 
+	currentServerInfo, err := api.GetAuthorizedServerInfo(globals.currentUser.CurrentServer.URL, globals.currentUser.AuthToken)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	categories := currentServerInfo.Categories
+	currentRoom := categories[0].Rooms[0]
+
+	currentRoomsMessages, err := api.GetMessagesInRoom(globals.currentUser.CurrentServer.URL, currentRoom.ID, globals.currentUser.AuthToken)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	wsURL := strings.Replace(globals.currentUser.CurrentServer.URL, "http", "ws", 1) + "/ws/connect"
+	wsConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		log.Fatal("Failed to connect to WebSocket:", err)
+	}
+
+	messageChannel := make(chan api.Message)
+
+	go func() {
+		defer wsConn.Close()
+		for {
+			_, msg, err := wsConn.ReadMessage()
+			if err != nil {
+				log.Println("Error reading WebSocket message:", err)
+				return
+			}
+			var message api.Message
+			err = json.Unmarshal(msg, &message)
+			if err != nil {
+				log.Println("Error unmarshalling WebSocket message:", err)
+				continue
+			}
+			messageChannel <- message
+		}
+	}()
+
 	return RootScreen{
 		messagesViewPort:            messagesVP,
+		currentServerInfo:           currentServerInfo,
+		totalRoomCount:              shared.GetTotalRoomCount(categories),
 		currentlyHighlightedArea:    "messageInput",
-		currentlySelectedRoom:       1,
-		currentlyHighlightedMessage: len(data.GeneralRoomMessages) - 1,
-		messages:                    data.GeneralRoomMessages,
+		currentlySelectedRoom:       currentRoom.ID,
+		currentlyHighlightedMessage: 0,
+		messages:                    currentRoomsMessages,
 		roomChanged:                 true,
 		textarea:                    ti,
+		wsConn:                      wsConn,
+		messageChannel:              messageChannel,
 	}
 }
 
@@ -63,6 +112,21 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	)
 
 	areas := []string{"sidebar", "mainArea", "messageInput"}
+	// Handle WebSocket messages
+	select {
+	case message := <-r.messageChannel:
+		// Append message to messages slice
+		r.messages = append(r.messages, message)
+		messageLen := len(r.messages)
+		if r.currentlyHighlightedMessage == messageLen-2 {
+			r.currentlyHighlightedMessage++
+		}
+
+		if r.currentlyHighlightedMessage == messageLen-1 {
+			r.roomChanged = true
+		}
+	default:
+	}
 
 	// OnWindowResize
 	if msg, ok := msg.(tea.WindowSizeMsg); ok {
@@ -108,25 +172,15 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Sidebar Navigation: j/k or arrow keys to navigate
 		if r.currentlyHighlightedArea == "sidebar" {
 			if msg.String() == "j" || msg.String() == "down" {
-				if r.currentlySelectedRoom == 10 {
-					r.currentlySelectedRoom = 1
-				} else {
-					r.currentlySelectedRoom++
-				}
-
-				r.messages = data.GetRoomMessages(r.currentlySelectedRoom)
+				r.currentlySelectedRoom = shared.GetNextRoomId(r.currentServerInfo.Categories, r.currentlySelectedRoom)
+				r.messages, _ = api.GetMessagesInRoom(globals.currentUser.CurrentServer.URL, r.currentlySelectedRoom, globals.currentUser.AuthToken)
 				r.currentlyHighlightedMessage = len(r.messages) - 1
 				r.roomChanged = true
 			}
 
 			if msg.String() == "k" || msg.String() == "up" {
-				if r.currentlySelectedRoom == 1 {
-					r.currentlySelectedRoom = 10
-				} else {
-					r.currentlySelectedRoom--
-				}
-
-				r.messages = data.GetRoomMessages(r.currentlySelectedRoom)
+				r.currentlySelectedRoom = shared.GetPreviousRoomId(r.currentServerInfo.Categories, r.currentlySelectedRoom)
+				r.messages, _ = api.GetMessagesInRoom(globals.currentUser.CurrentServer.URL, r.currentlySelectedRoom, globals.currentUser.AuthToken)
 				r.currentlyHighlightedMessage = len(r.messages) - 1
 				r.roomChanged = true
 			}
@@ -147,84 +201,6 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					r.messagesViewPort.LineUp(3)
 				}
 			}
-
-			// likeReaction := shared.Reactions{
-			// 	Reaction: "LIKE",
-			// 	Count: 1,
-			// 	Users: []string{"Jane Doe"},
-			// 	Color: lipgloss.AdaptiveColor{
-			// 		Light: catppuccin.Mocha.Sapphire().Hex,
-			// 		Dark: catppuccin.Mocha.Sapphire().Hex,
-			// 	},
-			// }
-			// Ctrl + L to like the currently highlighted message or unlike it if already liked
-
-			if msg.String() == "ctrl+l" {
-				message := r.messages[r.currentlyHighlightedMessage]
-
-				// Check if the message has a LIKE reaction
-				likeReactionIndex := -1
-
-				for i, reaction := range message.Reactions {
-					if reaction.Reaction == "LIKE" {
-						likeReactionIndex = i
-						break
-					}
-				}
-
-				if likeReactionIndex == -1 {
-					// Add a LIKE reaction to the message
-					newReaction := shared.Reactions{
-						Reaction: "LIKE",
-						Count:    1,
-						Users:    []string{globals.currentUser.DisplayName},
-						Color: lipgloss.AdaptiveColor{
-							Light: catppuccin.Mocha.Sapphire().Hex,
-							Dark:  catppuccin.Mocha.Sapphire().Hex,
-						},
-					}
-
-					r.messages[r.currentlyHighlightedMessage].Reactions = append(r.messages[r.currentlyHighlightedMessage].Reactions, newReaction)
-				} else {
-					// Check if the current user has already liked the message
-					liked := false
-
-					for _, reaction := range message.Reactions {
-						if reaction.Reaction == "LIKE" {
-							for _, user := range reaction.Users {
-								if user == globals.currentUser.DisplayName {
-									liked = true
-									break
-								}
-							}
-						}
-					}
-
-					if liked {
-						// Unlike the message
-						for i, reaction := range message.Reactions {
-							if reaction.Reaction == "LIKE" {
-								for j, user := range reaction.Users {
-									if user == globals.currentUser.DisplayName {
-										message.Reactions[i].Users = append(reaction.Users[:j], reaction.Users[j+1:]...)
-										message.Reactions[i].Count--
-										break
-									}
-								}
-							}
-						}
-					} else {
-						// Like the message
-						for i, reaction := range message.Reactions {
-							if reaction.Reaction == "LIKE" {
-								message.Reactions[i].Users = append(reaction.Users, globals.currentUser.DisplayName)
-								message.Reactions[i].Count++
-								break
-							}
-						}
-					}
-				}
-			}
 		}
 
 		// Message Input:
@@ -234,17 +210,20 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		} else {
 			if msg.String() == "ctrl+s" {
-				if r.textarea.Value() != "" {
-					newMessage := shared.Message{
-						Author:    globals.currentUser.DisplayName,
-						Content:   r.textarea.Value(),
-						Reactions: []shared.Reactions{},
-						SentAt:    time.Now(),
+				if strings.TrimSpace(r.textarea.Value()) != "" {
+					newMessage := api.SendRoomMessage{
+						Content: r.textarea.Value(),
+					}
+					err := api.SendMessageToRoom(globals.currentUser.CurrentServer.URL, r.currentlySelectedRoom, globals.currentUser.AuthToken, newMessage)
+
+					if err != nil {
+						log.Fatal(err)
 					}
 
-					r.messages = append(r.messages, newMessage)
-					r.currentlyHighlightedMessage = len(r.messages) - 1
-					r.roomChanged = true
+					// r.messages, _ = api.GetMessagesInRoom(globals.currentUser.CurrentServer.URL, r.currentlySelectedRoom, globals.currentUser.AuthToken)
+					r.currentlyHighlightedMessage = len(r.messages)
+					// r.roomChanged = true
+
 					r.textarea.SetValue("")
 				}
 			}
@@ -260,8 +239,10 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Generate the viewport content based on the updated messages
 	viewPortString := generators.MessageViewBuilder(r.messages, r.currentlyHighlightedMessage, r.messagesViewPort.Width, r.currentlyHighlightedArea == "mainArea")
 
+	// Set the content of the viewport
 	r.messagesViewPort.SetContent(viewPortString)
 
 	if r.roomChanged {
@@ -269,6 +250,7 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		r.roomChanged = false
 	}
 
+	// Update viewport and textarea models
 	r.messagesViewPort, viewPortCommand = r.messagesViewPort.Update(msg)
 	r.textarea, textAreaCommand = r.textarea.Update(msg)
 
@@ -276,11 +258,11 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (r RootScreen) View() string {
-	currentRoomName := data.GetRoomName(r.currentlySelectedRoom)
+	currentRoomName := shared.GetRoomNameFromId(r.currentServerInfo.Categories, r.currentlySelectedRoom)
 
 	topBar := generators.TopBarView("Eskimoe", currentRoomName, globals.currentUser.DisplayName, globals.width)
 
-	sidebar := generators.SidebarView(data.Categories, r.currentlySelectedRoom, globals.height, topBar, r.currentlyHighlightedArea == "sidebar")
+	sidebar := generators.SidebarView(r.currentServerInfo.Categories, r.currentlySelectedRoom, globals.height, topBar, r.currentlyHighlightedArea == "sidebar")
 
 	messageInput := generators.MessageInputView(r.textarea.View(), globals.width, r.currentlyHighlightedArea == "messageInput")
 

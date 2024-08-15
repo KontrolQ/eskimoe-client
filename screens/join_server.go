@@ -5,6 +5,7 @@ import (
 	"eskimoe-client/database"
 	"eskimoe-client/lib"
 	"fmt"
+	"log"
 
 	catppuccin "github.com/catppuccin/go"
 	"github.com/charmbracelet/bubbles/help"
@@ -20,7 +21,7 @@ type JoinServerScreen struct {
 	keys          lib.QuitConfirmKeyMap
 	serverEntered bool
 	server        database.Server
-	serverInfo    api.ServerInfo
+	serverInfo    api.ServerInfoUnauthorized
 }
 
 func joinServerScreen() tea.Model {
@@ -57,12 +58,12 @@ func (j JoinServerScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.Type {
 		case tea.KeyEnter:
 			if j.serverEntered {
-				err := database.JoinServer(globals.currentUser, j.server)
-				fmt.Println("Joining server", j.server)
+				updatedUser, err := database.JoinServer(globals.currentUser, j.server)
 				if err != nil {
-					fmt.Println("Error joining server", err)
+					log.Fatal("Error joining server:", err)
 				} else {
 					globals.servers = database.GetServers(globals.currentUser)
+					globals.currentUser = updatedUser
 					globals.currentUser.CurrentServer = j.server
 
 					return screen().Switch(rootScreen())

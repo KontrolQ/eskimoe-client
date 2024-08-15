@@ -10,8 +10,8 @@ type User struct {
 	Servers         []Server        `gorm:"many2many:user_servers" json:"-"`
 	DisplayName     string          `json:"display_name"`
 	Current         bool            `gorm:"default:false" json:"-"`
-	CurrentServerID uint            `json:"-"`
 	CurrentServer   Server          `gorm:"foreignKey:CurrentServerID" json:"-"`
+	CurrentServerID uint            `json:"-"`
 	Preferences     UserPreferences `gorm:"embedded" json:"preferences"`
 }
 

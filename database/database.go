@@ -82,7 +82,7 @@ func GetServers(user User) []Server {
 	return servers
 }
 
-func JoinServer(user User, server Server) error {
+func JoinServer(user User, server Server) (User, error) {
 	serverURL := server.URL
 	member := api.JoinMemberRequest{
 		UniqueID:    user.UniqueID,
@@ -90,19 +90,45 @@ func JoinServer(user User, server Server) error {
 		DisplayName: user.DisplayName,
 	}
 
+	// Attempt to join the server via an API call
 	resp, err := api.JoinServerAsMember(serverURL, member)
-
 	if err != nil {
-		return err
+		return user, err
 	}
 
-	// Update the user's auth token
+	// Check if the server is already in the database
+	var existingServer Server
+	if err := Database.Where("url = ?", server.URL).First(&existingServer).Error; err != nil {
+		// If not, save it
+		if err := Database.Create(&server).Error; err != nil {
+			return user, err
+		}
+	} else {
+		// Use the existing server
+		server = existingServer
+	}
+
+	// Update the user's auth token with the one from the server
 	user.AuthToken = resp.Member.AuthToken
-	Database.Save(&user)
 
-	Database.Model(&user).Association("Servers").Append(&server)
+	// Set the current server to the newly joined server
+	user.CurrentServer = server
+	user.CurrentServerID = server.ID
 
-	return nil
+	// Mark the user as the current user
+	user.Current = true
+
+	// Save the updated user record in the database
+	if err := Database.Save(&user).Error; err != nil {
+		return user, err
+	}
+
+	// Add the server to the user's list of servers
+	if err := Database.Model(&user).Association("Servers").Append(&server); err != nil {
+		return user, err
+	}
+
+	return user, nil
 }
 
 func Initialize() {

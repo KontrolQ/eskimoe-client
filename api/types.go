@@ -1,23 +1,5 @@
 package api
 
-// Request Types
-type JoinMemberRequest struct {
-	UniqueID    string `json:"unique_id"`
-	UniqueToken string `json:"unique_token"`
-	DisplayName string `json:"display_name"`
-}
-
-// Response Types
-type JoinMemberSuccessResponse struct {
-	Message string `json:"message"`
-	Member  Member `json:"member"`
-}
-
-type JoinMemberErrorResponse struct {
-	ErrorCode int    `json:"error_code"`
-	Error     string `json:"error"`
-}
-
 // Server Types
 type Permission string
 
@@ -43,6 +25,15 @@ const (
 	Administrator      Permission = "administrator"
 )
 
+type RoomType string
+
+const (
+	Announcement RoomType = "announcement"
+	Text         RoomType = "text"
+	Commands     RoomType = "commands"
+	Archive      RoomType = "archive"
+)
+
 type Member struct {
 	AuthToken   string `json:"auth_token"`
 	DisplayName string `json:"display_name"`
@@ -58,4 +49,97 @@ type Role struct {
 	Permissions []Permission `json:"permissions"`
 	SystemRole  bool         `json:"system_role"`
 	CreatedAt   string       `json:"created_at"`
+}
+
+type Category struct {
+	ID        int    `json:"id"`
+	Name      string `json:"name"`
+	Rooms     []Room `json:"rooms"`
+	RoomOrder []int  `json:"room_order"`
+}
+
+type Room struct {
+	ID          int      `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Type        RoomType `json:"type"`
+	CreatedAt   string   `json:"created_at"`
+}
+
+type Message struct {
+	Content     string            `json:"content"`
+	Author      Member            `json:"author"`
+	Reactions   []MessageReaction `json:"reactions"`
+	Attachments []Attachment      `json:"attachments"`
+	Edited      bool              `json:"edited"`
+	CreatedAt   string            `json:"created_at"`
+}
+
+type SendRoomMessage struct {
+	Content string `json:"content"`
+}
+
+type Attachment struct {
+	Type    string  `json:"type"`
+	URL     string  `json:"url"`
+	Message Message `json:"message"`
+}
+
+type MessageReaction struct {
+	Reaction ServerReaction `json:"reaction"`
+	Members  []Member       `json:"members"`
+	Count    int            `json:"count"`
+}
+
+type ServerReaction struct {
+	Reaction  string `json:"reaction"`
+	Color     string `json:"color"`
+	CreatedAt string `json:"created_at"`
+}
+
+type Event struct {
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	StartTime   string   `json:"start_time"`
+	EndTime     string   `json:"end_time"`
+	CreatedBy   Member   `json:"created_by"`
+	Interested  []Member `json:"interested"`
+	CreatedAt   string   `json:"created_at"`
+}
+
+type ServerInfoUnauthorized struct {
+	Name    string `json:"name"`
+	Message string `json:"message"`
+	Version string `json:"version"`
+}
+
+type ServerInfoAuthorized struct {
+	Name            string           `json:"name"`
+	Message         string           `json:"message"`
+	PublicURL       string           `json:"public_url"`
+	Mode            string           `json:"mode"`
+	Categories      []Category       `json:"categories"`
+	CategoryOrder   []int            `json:"category_order"`
+	ServerReactions []ServerReaction `json:"server_reactions"`
+	Roles           []Role           `json:"roles"`
+	RoleOrder       []int            `json:"role_order"`
+	Events          []Event          `json:"events"`
+	Members         []Member         `json:"members"`
+	CreatedAt       string           `json:"created_at"`
+}
+
+type JoinMemberRequest struct {
+	UniqueID    string `json:"unique_id"`
+	UniqueToken string `json:"unique_token"`
+	DisplayName string `json:"display_name"`
+}
+
+type JoinMemberSuccessResponse struct {
+	Message string `json:"message"`
+	Member  Member `json:"member"`
+}
+
+type JoinMemberErrorResponse struct {
+	ErrorCode int    `json:"error_code"`
+	Error     string `json:"error"`
 }
