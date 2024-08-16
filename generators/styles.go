@@ -44,6 +44,25 @@ func GenerateStyles(pref database.UserPreferences) shared.StyleSheet {
 				Light: pref.UserBarBackgroundLight,
 				Dark:  pref.UserBarBackgroundDark,
 			}),
+		ErrorTextStyle: BaseStyle.
+			Padding(0, 1).
+			Foreground(lipgloss.AdaptiveColor{
+				Light: pref.MessageTextLight,
+				Dark:  pref.MessageTextDark,
+			}).
+			Background(lipgloss.AdaptiveColor{
+				Light: pref.ErrorBackgroundLight,
+				Dark:  pref.ErrorBackgroundDark,
+			}),
+		StatusBarStyle: BaseStyle.
+			Foreground(lipgloss.AdaptiveColor{
+				Light: pref.MessageTextDark,
+				Dark:  pref.MessageTextLight,
+			}).
+			Background(lipgloss.AdaptiveColor{
+				Light: pref.StatusBarBackgroundLight,
+				Dark:  pref.StatusBarBackgroundDark,
+			}),
 		NormalAreaStyle: BaseStyle.
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderForeground(lipgloss.AdaptiveColor{

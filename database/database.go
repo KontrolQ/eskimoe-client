@@ -45,6 +45,10 @@ func makePrefs() UserPreferences {
 		UserBarTextDark:                shared.DefaultPreferences.UserBarText.Dark,
 		UserBarBackgroundLight:         shared.DefaultPreferences.UserBarBackground.Light,
 		UserBarBackgroundDark:          shared.DefaultPreferences.UserBarBackground.Dark,
+		ErrorBackgroundLight:           shared.DefaultPreferences.ErrorBackground.Light,
+		ErrorBackgroundDark:            shared.DefaultPreferences.ErrorBackground.Dark,
+		StatusBarBackgroundLight:       shared.DefaultPreferences.StatusBarBackground.Light,
+		StatusBarBackgroundDark:        shared.DefaultPreferences.StatusBarBackground.Dark,
 		SidebarWidth:                   shared.DefaultPreferences.SidebarWidth,
 		MessageInputHeight:             shared.DefaultPreferences.MessageInputHeight,
 	}
@@ -70,6 +74,9 @@ func GetCurrentUser() User {
 	var user User
 
 	Database.Where("current = ?", true).First(&user)
+
+	// Debug Only: Restore all default preferences
+	user.Preferences = makePrefs()
 
 	return user
 }

@@ -53,6 +53,10 @@ type UserPreferences struct {
 	UserBarTextDark                string `json:"user_bar_text_dark"`
 	UserBarBackgroundLight         string `json:"user_bar_background_light"`
 	UserBarBackgroundDark          string `json:"user_bar_background_dark"`
+	ErrorBackgroundLight           string `json:"error_background_light"`
+	ErrorBackgroundDark            string `json:"error_background_dark"`
+	StatusBarBackgroundLight       string `json:"status_bar_background_light"`
+	StatusBarBackgroundDark        string `json:"status_bar_background_dark"`
 	SidebarWidth                   int    `json:"sidebar_width"`
 	MessageInputHeight             int    `json:"message_input_height"`
 }

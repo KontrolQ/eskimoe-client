@@ -65,6 +65,14 @@ var DefaultPreferences = Preferences{
 		Light: catppuccin.Latte.Yellow().Hex,
 		Dark:  catppuccin.Mocha.Yellow().Hex,
 	},
+	ErrorBackground: ColorPreference{
+		Light: catppuccin.Mocha.Maroon().Hex,
+		Dark:  catppuccin.Latte.Maroon().Hex,
+	},
+	StatusBarBackground: ColorPreference{
+		Light: catppuccin.Latte.Mauve().Hex,
+		Dark:  catppuccin.Mocha.Mauve().Hex,
+	},
 	SidebarWidth:       30,
 	MessageInputHeight: 10,
 }

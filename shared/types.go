@@ -27,6 +27,8 @@ type Preferences struct {
 	ServerStatusBackground    ColorPreference
 	UserBarText               ColorPreference
 	UserBarBackground         ColorPreference
+	ErrorBackground           ColorPreference
+	StatusBarBackground       ColorPreference
 	SidebarWidth              int
 	MessageInputHeight        int
 }
@@ -44,6 +46,8 @@ type StyleSheet struct {
 	HighlightedRoomTextStyle      lipgloss.Style
 	MessageAuthorStyle            lipgloss.Style
 	MessageTextStyle              lipgloss.Style
+	ErrorTextStyle                lipgloss.Style
+	StatusBarStyle                lipgloss.Style
 }
 
 type Reactions struct {

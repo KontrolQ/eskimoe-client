@@ -3,6 +3,7 @@ package generators
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/reflow/wrap"
@@ -34,13 +35,14 @@ func SingleMessageView(message api.Message, width int) string {
 
 	var timestring string
 
-	timestring = message.CreatedAt
-
-	// if message.SentAt.Day() == time.Now().Day() {
-	// 	timestring = message.SentAt.Format("15:04")
-	// } else {
-	// 	timestring = message.SentAt.Format("2006-01-02 15:04")
-	// }
+	timestring = message.CreatedAt // 2024-08-15T18:00:19.810991-04:00
+	t, _ := time.Parse(time.RFC3339, timestring)
+	// If the message was sent today, only show the time
+	if t.Day() == time.Now().Day() {
+		timestring = t.Format("03:04 PM")
+	} else {
+		timestring = t.Format("Jan 02, 2006 03:04 PM")
+	}
 
 	time := Style.MessageAuthorStyle.Padding(0, 1).Render(timestring)
 
@@ -80,7 +82,7 @@ func SingleMessageView(message api.Message, width int) string {
 	return m
 }
 
-func MessageViewBuilder(messages []api.Message, currentlyHighlightedMessage int, width int, mainAreaHighlighted bool) string {
+func MessageViewBuilder(messages []api.Message, currentlyHighlightedMessage, width int, mainAreaHighlighted bool) string {
 	var messagesArray []string
 
 	if len(messages) == 0 {
@@ -134,7 +136,68 @@ func TopBarView(serverName, currentRoomName, currentUser string, width int) stri
 	return topBar
 }
 
-func SidebarView(categories []api.Category, currentlySelectedRoom int, height int, topBar string, currentlyHighlighted bool) string {
+func StatusBarView(errorMessage, currentlyHighlightedArea string, width int) string {
+	w := lipgloss.Width
+
+	var statusBar string
+	var errorText string
+	if errorMessage != "" {
+		errorText = Style.ErrorTextStyle.Render(errorMessage)
+	}
+
+	// Status bar displays key shortcuts based on the currently highlighted area
+	var helpText string
+	switch currentlyHighlightedArea {
+	case "sidebar":
+		helpText = lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			Style.BaseStyle.Padding(0, 1).Render("↑/k: up"),
+			Style.BaseStyle.Padding(0, 1).Render("↓/j: down"),
+			Style.BaseStyle.Padding(0, 1).Render("ctrl+e: edit sidebar"),
+			Style.BaseStyle.Padding(0, 1).Render("ctrl+c: quit"),
+		)
+	case "mainArea":
+		helpText = lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			Style.BaseStyle.Padding(0, 1).Render("↑/k: up"),
+			Style.BaseStyle.Padding(0, 1).Render("↓/j: down"),
+			Style.BaseStyle.Padding(0, 1).Render("e: edit message"),
+			Style.BaseStyle.Padding(0, 1).Render("r: react"),
+			Style.BaseStyle.Padding(0, 1).Render("d: delete"),
+			Style.BaseStyle.Padding(0, 1).Render("ctrl+c: quit"),
+		)
+	case "messageInput":
+		helpText = lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			Style.BaseStyle.Padding(0, 1).Render("ctrl+s: send"),
+			Style.BaseStyle.Padding(0, 1).Render("ctrl+c: quit"),
+		)
+	}
+
+	separator := Style.BaseStyle.Width(width - w(errorText) - w(helpText)).Render("")
+	statusBarRender := Style.StatusBarStyle.Render(helpText + separator)
+
+	statusBar = lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		statusBarRender,
+		errorText,
+	)
+
+	// versionText := Style.BaseStyle.Render("v0.1.0")
+	// separator := Style.BaseStyle.Width(width - w(errorText) - w(versionText)).Render("")
+
+	// statusBarRender := Style.StatusBarStyle.Render(separator + versionText)
+
+	// statusBar = lipgloss.JoinHorizontal(
+	// 	lipgloss.Top,
+	// 	errorText,
+	// 	statusBarRender,
+	// )
+
+	return statusBar
+}
+
+func SidebarView(categories []api.Category, currentlySelectedRoom, height int, topBar, statusBar string, currentlyHighlighted bool) string {
 	h := lipgloss.Height
 
 	var sidebarDoc strings.Builder
@@ -165,19 +228,19 @@ func SidebarView(categories []api.Category, currentlySelectedRoom int, height in
 	if currentlyHighlighted {
 		sidebar = Style.HighlightedAreaStyle.Padding(0, 1).
 			Width(Preferences.SidebarWidth).
-			Height(height - h(topBar) - 2).
+			Height(height - h(topBar) - h(statusBar) - 2).
 			Render(sidebarDoc.String())
 	} else {
 		sidebar = Style.NormalAreaStyle.Padding(0, 1).
 			Width(Preferences.SidebarWidth).
-			Height(height - h(topBar) - 2).
+			Height(height - h(topBar) - h(statusBar) - 2).
 			Render(sidebarDoc.String())
 	}
 
 	return sidebar
 }
 
-func MainAreaView(viewport string, width, height int, topBar string, currentlyHighlighted bool) string {
+func MainAreaView(viewport string, width, height int, topBar, statusBar string, currentlyHighlighted bool) string {
 	h := lipgloss.Height
 
 	var mainArea string
@@ -185,12 +248,12 @@ func MainAreaView(viewport string, width, height int, topBar string, currentlyHi
 	if currentlyHighlighted {
 		mainArea = Style.HighlightedAreaStyle.Padding(0, 1).
 			Width(width - Preferences.SidebarWidth - 4).
-			Height(height - h(topBar) - Preferences.MessageInputHeight - 4).
+			Height(height - h(topBar) - h(statusBar) - Preferences.MessageInputHeight - 4).
 			Render(viewport)
 	} else {
 		mainArea = Style.NormalAreaStyle.Padding(0, 1).
 			Width(width - Preferences.SidebarWidth - 4).
-			Height(height - h(topBar) - Preferences.MessageInputHeight - 4).
+			Height(height - h(topBar) - h(statusBar) - Preferences.MessageInputHeight - 4).
 			Render(viewport)
 	}
 

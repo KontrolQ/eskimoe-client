@@ -5,11 +5,12 @@ import (
 	"eskimoe-client/api"
 	"eskimoe-client/generators"
 	"eskimoe-client/shared"
-	"log"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gorilla/websocket"
@@ -27,6 +28,7 @@ type RootScreen struct {
 	textarea                    textarea.Model
 	wsConn                      *websocket.Conn
 	messageChannel              chan api.Message
+	errorMessage                string
 }
 
 func rootScreen() tea.Model {
@@ -44,65 +46,111 @@ func rootScreen() tea.Model {
 	ti.CharLimit = 4096
 	ti.ShowLineNumbers = false
 
+	var errorMessage string
 	currentServerInfo, err := api.GetAuthorizedServerInfo(globals.currentUser.CurrentServer.URL, globals.currentUser.AuthToken)
 	if err != nil {
-		log.Fatal(err)
+		errorMessage = err.Error()
 	}
 
 	categories := currentServerInfo.Categories
+	if len(categories) == 0 {
+		categories = append(categories, api.Category{
+			Name: "Failed...",
+			Rooms: []api.Room{
+				{
+					ID:   0,
+					Name: "Failed to load server info",
+				},
+			},
+		})
+	}
 	currentRoom := categories[0].Rooms[0]
 
 	currentRoomsMessages, err := api.GetMessagesInRoom(globals.currentUser.CurrentServer.URL, currentRoom.ID, globals.currentUser.AuthToken)
 	if err != nil {
-		log.Fatal(err)
+		errorMessage = err.Error()
 	}
 
-	wsURL := strings.Replace(globals.currentUser.CurrentServer.URL, "http", "ws", 1) + "/ws/connect"
-	wsConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
-	if err != nil {
-		log.Fatal("Failed to connect to WebSocket:", err)
-	}
-
-	messageChannel := make(chan api.Message)
-
-	go func() {
-		defer wsConn.Close()
-		for {
-			_, msg, err := wsConn.ReadMessage()
-			if err != nil {
-				log.Println("Error reading WebSocket message:", err)
-				return
-			}
-			var message api.Message
-			err = json.Unmarshal(msg, &message)
-			if err != nil {
-				log.Println("Error unmarshalling WebSocket message:", err)
-				continue
-			}
-			messageChannel <- message
-		}
-	}()
-
-	return RootScreen{
+	rootScreen := RootScreen{
 		messagesViewPort:            messagesVP,
 		currentServerInfo:           currentServerInfo,
 		totalRoomCount:              shared.GetTotalRoomCount(categories),
 		currentlyHighlightedArea:    "messageInput",
 		currentlySelectedRoom:       currentRoom.ID,
-		currentlyHighlightedMessage: 0,
+		currentlyHighlightedMessage: len(currentRoomsMessages) - 1,
 		messages:                    currentRoomsMessages,
 		roomChanged:                 true,
 		textarea:                    ti,
-		wsConn:                      wsConn,
-		messageChannel:              messageChannel,
+		errorMessage:                errorMessage,
 	}
+
+	rootScreen.ConnectToSocket()
+
+	return rootScreen
 }
+
+// tea.Cmd to clear the error message after 3 seconds
+func clearErrorMessage() tea.Cmd {
+	return tea.Tick(time.Second*3, func(time.Time) tea.Msg {
+		return clearError{}
+	})
+}
+
+type clearError struct{}
 
 func (r RootScreen) Init() tea.Cmd {
 	return tea.Batch(
 		tea.SetWindowTitle("Eskimoe"),
 		textarea.Blink,
+		clearErrorMessage(),
 	)
+}
+
+func (r *RootScreen) ConnectToSocket() {
+	wsURL := strings.Replace(globals.currentUser.CurrentServer.URL, "http", "ws", 1) + "/ws/connect"
+	wsConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		r.errorMessage = "failed to connect to the server's socket endpoint"
+	}
+
+	messageChannel := make(chan api.Message)
+
+	if wsConn != nil {
+		go func() {
+			defer wsConn.Close()
+			for {
+				_, msg, err := wsConn.ReadMessage()
+				if err != nil {
+					r.errorMessage = "failed to read a recently received message"
+					break
+				}
+				var message api.Message
+				err = json.Unmarshal(msg, &message)
+				if err != nil {
+					r.errorMessage = "failed to unmarshal a recently received message"
+					continue
+				}
+				messageChannel <- message
+			}
+		}()
+	}
+
+	r.wsConn = wsConn
+	r.messageChannel = messageChannel
+}
+
+func (r *RootScreen) AttemptReconnect() {
+	r.ConnectToSocket()
+	currentServerInfo, err := api.GetAuthorizedServerInfo(globals.currentUser.CurrentServer.URL, globals.currentUser.AuthToken)
+	if err == nil {
+		r.currentServerInfo = currentServerInfo
+		r.totalRoomCount = shared.GetTotalRoomCount(currentServerInfo.Categories)
+		r.currentlySelectedRoom = currentServerInfo.Categories[0].Rooms[0].ID
+		r.messages, _ = api.GetMessagesInRoom(globals.currentUser.CurrentServer.URL, r.currentlySelectedRoom, globals.currentUser.AuthToken)
+		r.currentlyHighlightedMessage = len(r.messages) - 1
+		r.roomChanged = true
+		r.errorMessage = ""
+	}
 }
 
 func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -112,6 +160,7 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	)
 
 	areas := []string{"sidebar", "mainArea", "messageInput"}
+
 	// Handle WebSocket messages
 	select {
 	case message := <-r.messageChannel:
@@ -126,6 +175,21 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			r.roomChanged = true
 		}
 	default:
+	}
+
+	// Handle clearing the error message
+	if _, ok := msg.(clearError); ok {
+		r.errorMessage = ""
+	}
+
+	// Check if connection is still alive
+	if r.wsConn != nil {
+		err := r.wsConn.WriteMessage(websocket.PingMessage, nil)
+		if err != nil {
+			r.AttemptReconnect()
+		}
+	} else {
+		r.AttemptReconnect()
 	}
 
 	// OnWindowResize
@@ -217,14 +281,12 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					err := api.SendMessageToRoom(globals.currentUser.CurrentServer.URL, r.currentlySelectedRoom, globals.currentUser.AuthToken, newMessage)
 
 					if err != nil {
-						log.Fatal(err)
+						r.wsConn = nil
+					} else {
+						r.errorMessage = ""
+						r.currentlyHighlightedMessage = len(r.messages)
+						r.textarea.SetValue("")
 					}
-
-					// r.messages, _ = api.GetMessagesInRoom(globals.currentUser.CurrentServer.URL, r.currentlySelectedRoom, globals.currentUser.AuthToken)
-					r.currentlyHighlightedMessage = len(r.messages)
-					// r.roomChanged = true
-
-					r.textarea.SetValue("")
 				}
 			}
 
@@ -262,11 +324,13 @@ func (r RootScreen) View() string {
 
 	topBar := generators.TopBarView("Eskimoe", currentRoomName, globals.currentUser.DisplayName, globals.width)
 
-	sidebar := generators.SidebarView(r.currentServerInfo.Categories, r.currentlySelectedRoom, globals.height, topBar, r.currentlyHighlightedArea == "sidebar")
+	statusBar := generators.StatusBarView(r.errorMessage, r.currentlyHighlightedArea, globals.width)
+
+	sidebar := generators.SidebarView(r.currentServerInfo.Categories, r.currentlySelectedRoom, globals.height, topBar, statusBar, r.currentlyHighlightedArea == "sidebar")
 
 	messageInput := generators.MessageInputView(r.textarea.View(), globals.width, r.currentlyHighlightedArea == "messageInput")
 
-	mainArea := generators.MainAreaView(r.messagesViewPort.View(), globals.width, globals.height, topBar, r.currentlyHighlightedArea == "mainArea")
+	mainArea := generators.MainAreaView(r.messagesViewPort.View(), globals.width, globals.height, topBar, statusBar, r.currentlyHighlightedArea == "mainArea")
 
 	rootView := lipgloss.JoinVertical(
 		lipgloss.Top,
@@ -280,6 +344,7 @@ func (r RootScreen) View() string {
 				messageInput,
 			),
 		),
+		statusBar,
 	)
 
 	return rootView
