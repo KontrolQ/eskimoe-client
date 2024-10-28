@@ -1,5 +1,39 @@
 package api
 
+// Socket Types
+type BroadcastType int
+
+const (
+	MessageCreated BroadcastType = iota
+	MessageDeleted
+	MessageEdited
+	MessageBulkDeleted
+	MessageReactionCreated
+	MessageReactionDeleted
+	MessageReactionUpdated
+	RoomCreated
+	RoomDeleted
+	RoomUpdated
+	CategoryCreated
+	CategoryDeleted
+	CategoryUpdated
+	CategoryOrderUpdated
+	MemberJoined
+	MemberLeft
+	MemberBanned
+	MemberKicked
+	MemberUnbanned
+	MemberUpdated
+	RoleCreated
+	RoleDeleted
+	RoleUpdated
+)
+
+type SocketBroadcast struct {
+	BroadcastType BroadcastType `json:"broadcast_type"`
+	Data          interface{}   `json:"data"`
+}
+
 // Server Types
 type Permission string
 
@@ -35,7 +69,7 @@ const (
 )
 
 type Member struct {
-	AuthToken   string `json:"auth_token"`
+	UID         string `json:"uid"`
 	DisplayName string `json:"display_name"`
 	About       string `json:"about"`
 	Pronouns    string `json:"pronouns"`
@@ -67,10 +101,12 @@ type Room struct {
 }
 
 type Message struct {
+	ID          int               `json:"id"`
 	Content     string            `json:"content"`
 	Author      Member            `json:"author"`
 	Reactions   []MessageReaction `json:"reactions"`
 	Attachments []Attachment      `json:"attachments"`
+	RoomID      int               `json:"room_id"`
 	Edited      bool              `json:"edited"`
 	CreatedAt   string            `json:"created_at"`
 }
@@ -135,11 +171,18 @@ type JoinMemberRequest struct {
 }
 
 type JoinMemberSuccessResponse struct {
-	Message string `json:"message"`
-	Member  Member `json:"member"`
+	AuthToken string `json:"auth_token"`
+	Message   string `json:"message"`
+	Member    Member `json:"member"`
 }
 
 type JoinMemberErrorResponse struct {
 	ErrorCode int    `json:"error_code"`
 	Error     string `json:"error"`
+}
+
+type DeletedMessage struct {
+	MessageID int  `json:"message_id"`
+	RoomID    int  `json:"room_id"`
+	Deleted   bool `json:"deleted"`
 }

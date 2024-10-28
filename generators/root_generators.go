@@ -22,7 +22,7 @@ func InitializeStyles(User database.User) {
 }
 
 func GetViewportDimensions(width, height int) (int, int) {
-	w := width - Preferences.SidebarWidth - 4
+	w := width - 2*Preferences.SidebarWidth - 4
 	h := height - Preferences.MessageInputHeight - 6
 
 	return w, h
@@ -240,6 +240,36 @@ func SidebarView(categories []api.Category, currentlySelectedRoom, height int, t
 	return sidebar
 }
 
+func MemberListView(members []api.Member, height int, topBar, statusBar string, currentlyHighlighted bool) string {
+	h := lipgloss.Height
+
+	var MemberListDoc strings.Builder
+
+	MemberListDoc.WriteString(Style.BaseStyle.Render("Members\n"))
+	MemberListDoc.WriteString(Style.BaseStyle.Render("-------\n"))
+
+	for _, member := range members {
+		memberText := Style.BaseStyle.Render(member.DisplayName)
+		MemberListDoc.WriteString(memberText + "\n")
+	}
+
+	var memberList string
+
+	if currentlyHighlighted {
+		memberList = Style.HighlightedAreaStyle.Padding(0, 1).
+			Width(Preferences.SidebarWidth).
+			Height(height - h(topBar) - h(statusBar) - 2).
+			Render(MemberListDoc.String())
+	} else {
+		memberList = Style.NormalAreaStyle.Padding(0, 1).
+			Width(Preferences.SidebarWidth).
+			Height(height - h(topBar) - h(statusBar) - 2).
+			Render(MemberListDoc.String())
+	}
+
+	return memberList
+}
+
 func MainAreaView(viewport string, width, height int, topBar, statusBar string, currentlyHighlighted bool) string {
 	h := lipgloss.Height
 
@@ -247,12 +277,12 @@ func MainAreaView(viewport string, width, height int, topBar, statusBar string, 
 
 	if currentlyHighlighted {
 		mainArea = Style.HighlightedAreaStyle.Padding(0, 1).
-			Width(width - Preferences.SidebarWidth - 4).
+			Width(width - 2*Preferences.SidebarWidth - 6).
 			Height(height - h(topBar) - h(statusBar) - Preferences.MessageInputHeight - 4).
 			Render(viewport)
 	} else {
 		mainArea = Style.NormalAreaStyle.Padding(0, 1).
-			Width(width - Preferences.SidebarWidth - 4).
+			Width(width - 2*Preferences.SidebarWidth - 6).
 			Height(height - h(topBar) - h(statusBar) - Preferences.MessageInputHeight - 4).
 			Render(viewport)
 	}
@@ -269,12 +299,12 @@ func MessageInputView(textareaView string, width int, currentlyHighlighted bool)
 
 	if currentlyHighlighted {
 		messageInput = Style.HighlightedAreaStyle.Padding(0, 1).
-			Width(width - Preferences.SidebarWidth - 4).
+			Width(width - 2*Preferences.SidebarWidth - 6).
 			Height(Preferences.MessageInputHeight).
 			Render(messageInputDoc.String())
 	} else {
 		messageInput = Style.NormalAreaStyle.Padding(0, 1).
-			Width(width - Preferences.SidebarWidth - 4).
+			Width(width - 2*Preferences.SidebarWidth - 6).
 			Height(Preferences.MessageInputHeight).
 			Render(messageInputDoc.String())
 	}

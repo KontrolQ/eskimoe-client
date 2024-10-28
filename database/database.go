@@ -116,7 +116,7 @@ func JoinServer(user User, server Server) (User, error) {
 	}
 
 	// Update the user's auth token with the one from the server
-	user.AuthToken = resp.Member.AuthToken
+	user.AuthToken = resp.AuthToken
 
 	// Set the current server to the newly joined server
 	user.CurrentServer = server
@@ -138,9 +138,43 @@ func JoinServer(user User, server Server) (User, error) {
 	return user, nil
 }
 
-func Initialize() {
+func LeaveServer(user User, server Server) (User, error) {
+	err := api.LeaveServer(user.CurrentServer.URL, user.AuthToken)
+	if err != nil {
+		return user, err
+	}
+
+	// Remove the server from the user's list of servers
+	if err := Database.Model(&user).Association("Servers").Delete(&server); err != nil {
+		return user, err
+	}
+
+	// If the user is leaving the current server, clear the current server or set to the first server in the list
+	if user.CurrentServerID == server.ID {
+		// Check if the user has any servers left
+		var servers []Server
+		Database.Model(&user).Association("Servers").Find(&servers)
+
+		if len(servers) > 0 {
+			user.CurrentServer = servers[0]
+			user.CurrentServerID = servers[0].ID
+		} else {
+			user.CurrentServer = Server{}
+			user.CurrentServerID = 0
+		}
+	}
+
+	// Save the updated user record in the database
+	if err := Database.Save(&user).Error; err != nil {
+		return user, err
+	}
+
+	return user, nil
+}
+
+func Initialize(databasePath string) {
 	var err error
-	Database, err = gorm.Open(sqlite.Open("eskimoe.db"), &gorm.Config{
+	Database, err = gorm.Open(sqlite.Open(databasePath), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {

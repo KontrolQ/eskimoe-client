@@ -20,7 +20,15 @@ import (
 )
 
 func main() {
-	database.Initialize()
+	databasePath := "eskimoe.db"
+
+	// Read database poth from args
+	if len(os.Args) > 1 {
+		fmt.Println("Using database path from command line:", os.Args[1])
+		databasePath = os.Args[1]
+	}
+
+	database.Initialize(databasePath)
 
 	p := tea.NewProgram(screens.Initialize(), tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {

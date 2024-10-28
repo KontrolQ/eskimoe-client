@@ -3,6 +3,7 @@ package screens
 import (
 	"encoding/json"
 	"eskimoe-client/api"
+	"eskimoe-client/database"
 	"eskimoe-client/generators"
 	"eskimoe-client/shared"
 	"strings"
@@ -27,7 +28,7 @@ type RootScreen struct {
 	roomChanged                 bool
 	textarea                    textarea.Model
 	wsConn                      *websocket.Conn
-	messageChannel              chan api.Message
+	socketBroadcast             chan api.SocketBroadcast
 	errorMessage                string
 }
 
@@ -45,6 +46,7 @@ func rootScreen() tea.Model {
 	ti.SetHeight(shared.DefaultPreferences.MessageInputHeight)
 	ti.CharLimit = 4096
 	ti.ShowLineNumbers = false
+	ti.KeyMap.InsertNewline.SetEnabled(false)
 
 	var errorMessage string
 	currentServerInfo, err := api.GetAuthorizedServerInfo(globals.currentUser.CurrentServer.URL, globals.currentUser.AuthToken)
@@ -107,36 +109,33 @@ func (r RootScreen) Init() tea.Cmd {
 }
 
 func (r *RootScreen) ConnectToSocket() {
-	wsURL := strings.Replace(globals.currentUser.CurrentServer.URL, "http", "ws", 1) + "/ws/connect"
-	wsConn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	headers := make(map[string][]string)
+	headers["Authorization"] = []string{globals.currentUser.AuthToken}
+	wsURL := strings.Replace(globals.currentUser.CurrentServer.URL, "http", "ws", 1) + "/ws/listen"
+	wsConn, _, err := websocket.DefaultDialer.Dial(wsURL, headers)
 	if err != nil {
 		r.errorMessage = "failed to connect to the server's socket endpoint"
 	}
 
-	messageChannel := make(chan api.Message)
+	socketBroadcast := make(chan api.SocketBroadcast)
 
 	if wsConn != nil {
 		go func() {
 			defer wsConn.Close()
 			for {
-				_, msg, err := wsConn.ReadMessage()
+				var broadcast api.SocketBroadcast
+				err := wsConn.ReadJSON(&broadcast)
 				if err != nil {
 					r.errorMessage = "failed to read a recently received message"
 					break
 				}
-				var message api.Message
-				err = json.Unmarshal(msg, &message)
-				if err != nil {
-					r.errorMessage = "failed to unmarshal a recently received message"
-					continue
-				}
-				messageChannel <- message
+				socketBroadcast <- broadcast
 			}
 		}()
 	}
 
 	r.wsConn = wsConn
-	r.messageChannel = messageChannel
+	r.socketBroadcast = socketBroadcast
 }
 
 func (r *RootScreen) AttemptReconnect() {
@@ -159,20 +158,38 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		textAreaCommand tea.Cmd
 	)
 
+	totalMessages := len(r.messages)
 	areas := []string{"sidebar", "mainArea", "messageInput"}
 
 	// Handle WebSocket messages
 	select {
-	case message := <-r.messageChannel:
-		// Append message to messages slice
-		r.messages = append(r.messages, message)
-		messageLen := len(r.messages)
-		if r.currentlyHighlightedMessage == messageLen-2 {
-			r.currentlyHighlightedMessage++
-		}
+	case message := <-r.socketBroadcast:
+		databytes, _ := json.Marshal(message.Data)
+		switch message.BroadcastType {
+		case api.MessageCreated:
+			var newMessage api.Message
+			_ = json.Unmarshal(databytes, &newMessage)
+			if newMessage.RoomID == r.currentlySelectedRoom {
+				r.messages = append(r.messages, newMessage)
+				totalMessages++
+				if r.currentlyHighlightedMessage == totalMessages-2 {
+					r.currentlyHighlightedMessage++
+				}
+			}
 
-		if r.currentlyHighlightedMessage == messageLen-1 {
-			r.roomChanged = true
+		case api.MessageDeleted:
+			var deletedMessage api.DeletedMessage
+			_ = json.Unmarshal(databytes, &deletedMessage)
+			for i, m := range r.messages {
+				if m.ID == deletedMessage.MessageID && m.RoomID == r.currentlySelectedRoom {
+					r.messages = append(r.messages[:i], r.messages[i+1:]...)
+					totalMessages--
+					if r.currentlyHighlightedMessage == totalMessages-1 {
+						r.currentlyHighlightedMessage--
+					}
+					break
+				}
+			}
 		}
 	default:
 	}
@@ -203,6 +220,13 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		r.textarea.SetWidth(vw - 4)
 		r.textarea.SetHeight(shared.DefaultPreferences.MessageInputHeight)
+	}
+
+	if r.currentlyHighlightedMessage >= totalMessages {
+		r.currentlyHighlightedMessage = totalMessages - 1
+	}
+	if r.currentlyHighlightedMessage < 0 {
+		r.currentlyHighlightedMessage = 0
 	}
 
 	if msg, ok := msg.(tea.KeyMsg); ok {
@@ -265,6 +289,27 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					r.messagesViewPort.LineUp(3)
 				}
 			}
+
+			// d on a message to delete it
+			if msg.String() == "d" {
+				isMessageAuthor := r.messages[r.currentlyHighlightedMessage].Author.UID == globals.currentUser.UniqueID
+				if !isMessageAuthor {
+					r.errorMessage = "You can only delete your own messages"
+				} else {
+					if r.currentlyHighlightedMessage < len(r.messages) && len(r.messages) > 0 {
+						r.errorMessage = "Deleting message..."
+						messageId := r.messages[r.currentlyHighlightedMessage].ID
+						err := api.DeleteMessageInRoom(globals.currentUser.CurrentServer.URL, r.currentlySelectedRoom, messageId, globals.currentUser.AuthToken)
+						if err != nil {
+							r.wsConn = nil
+							r.errorMessage = "Failed to delete message"
+						} else {
+							r.errorMessage = ""
+							r.messages = append(r.messages[:r.currentlyHighlightedMessage], r.messages[r.currentlyHighlightedMessage+1:]...)
+						}
+					}
+				}
+			}
 		}
 
 		// Message Input:
@@ -273,7 +318,13 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				r.textarea.Blur()
 			}
 		} else {
-			if msg.String() == "ctrl+s" {
+			if msg.String() == "alt+enter" {
+				// Shift+Enter to insert a newline
+				r.textarea.SetValue(r.textarea.Value() + "\n")
+			}
+
+			if msg.String() == "enter" {
+				r.errorMessage = "Sending message..."
 				if strings.TrimSpace(r.textarea.Value()) != "" {
 					newMessage := api.SendRoomMessage{
 						Content: r.textarea.Value(),
@@ -288,6 +339,7 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						r.textarea.SetValue("")
 					}
 				}
+				r.errorMessage = ""
 			}
 
 			if !r.textarea.Focused() {
@@ -299,6 +351,23 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return r, tea.Quit
 		}
+
+		// ctrl+l to leave the current server
+		if msg.String() == "ctrl+l" {
+			r.errorMessage = "Leaving server..."
+			user, err := database.LeaveServer(globals.currentUser, globals.currentUser.CurrentServer)
+			if err != nil {
+				r.errorMessage = "Failed to leave server: " + err.Error()
+			} else {
+				globals.currentUser = user
+				if user.CurrentServer.ID == 0 {
+					globals.servers = database.GetServers(globals.currentUser)
+					return screen().Switch(joinServerScreen())
+				} else {
+					return screen().Switch(rootScreen())
+				}
+			}
+		}
 	}
 
 	// Generate the viewport content based on the updated messages
@@ -307,7 +376,7 @@ func (r RootScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Set the content of the viewport
 	r.messagesViewPort.SetContent(viewPortString)
 
-	if r.roomChanged {
+	if r.roomChanged || r.currentlyHighlightedMessage == totalMessages-1 {
 		r.messagesViewPort.GotoBottom()
 		r.roomChanged = false
 	}
@@ -328,6 +397,8 @@ func (r RootScreen) View() string {
 
 	sidebar := generators.SidebarView(r.currentServerInfo.Categories, r.currentlySelectedRoom, globals.height, topBar, statusBar, r.currentlyHighlightedArea == "sidebar")
 
+	memberList := generators.MemberListView(r.currentServerInfo.Members, globals.height, topBar, statusBar, r.currentlyHighlightedArea == "memberList")
+
 	messageInput := generators.MessageInputView(r.textarea.View(), globals.width, r.currentlyHighlightedArea == "messageInput")
 
 	mainArea := generators.MainAreaView(r.messagesViewPort.View(), globals.width, globals.height, topBar, statusBar, r.currentlyHighlightedArea == "mainArea")
@@ -343,6 +414,7 @@ func (r RootScreen) View() string {
 				mainArea,
 				messageInput,
 			),
+			memberList,
 		),
 		statusBar,
 	)

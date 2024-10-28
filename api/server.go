@@ -123,6 +123,34 @@ func JoinServerAsMember(serverURL string, member JoinMemberRequest) (JoinMemberS
 	return successResponse, nil
 }
 
+func LeaveServer(serverURL string, authToken string) error {
+	serverURL = strings.TrimRight(serverURL, "/")
+
+	endpoint := serverURL + "/members/leave"
+
+	client := &http.Client{}
+
+	req, err := http.NewRequest("DELETE", endpoint, nil)
+	if err != nil {
+		return errors.New("failed to create request")
+	}
+
+	req.Header.Set("Authorization", authToken)
+
+	response, err := client.Do(req)
+	if err != nil {
+		return errors.New("failed to send request")
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return errors.New("failed to leave server")
+	}
+
+	return nil
+}
+
 func GetMessagesInRoom(serverURL string, roomId int, authToken string) ([]Message, error) {
 	serverURL = strings.TrimRight(serverURL, "/")
 	endpoint := fmt.Sprintf("%s/rooms/%d/messages", serverURL, roomId)
@@ -192,6 +220,33 @@ func SendMessageToRoom(serverURL string, roomId int, authToken string, message S
 	if response.StatusCode != http.StatusCreated {
 		fmt.Println(response)
 		return errors.New("failed to send message")
+	}
+
+	return nil
+}
+
+func DeleteMessageInRoom(serverURL string, roomId int, messageId int, authToken string) error {
+	serverURL = strings.TrimRight(serverURL, "/")
+	endpoint := fmt.Sprintf("%s/rooms/%d/messages/%d", serverURL, roomId, messageId)
+
+	client := &http.Client{}
+
+	req, err := http.NewRequest("DELETE", endpoint, nil)
+	if err != nil {
+		return errors.New("failed to create request")
+	}
+
+	req.Header.Set("Authorization", authToken)
+
+	response, err := client.Do(req)
+	if err != nil {
+		return errors.New("failed to send request")
+	}
+
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return errors.New("failed to delete message")
 	}
 
 	return nil
